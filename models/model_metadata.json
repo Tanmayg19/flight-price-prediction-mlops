@@ -1,0 +1,13 @@
+{
+    "model_name": "Optuna Tuned XGBoost Regressor",
+    "target_variable": "price",
+    "n_features": 26,
+    "train_rows": 221394,
+    "test_rows": 50494,
+    "optimization": "Optuna",
+    "metrics": {
+        "MAE": 50.57661854739916,
+        "RMSE": 62.304069442411446,
+        "R2_Score": 0.978431888191669
+    }
+}
