@@ -9,3 +9,4 @@ mlflow==3.15.1
 joblib
 requests
 streamlit
+pytest==9.0.2
