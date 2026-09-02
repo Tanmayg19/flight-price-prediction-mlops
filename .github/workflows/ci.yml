@@ -36,6 +36,35 @@ jobs:
             --allowed-hosts localhost:5000,127.0.0.1:5000 \
             > mlflow.log 2>&1 &
 
+      - name: Wait for MLflow
+        run: |
+          python - <<'PY'
+          import time
+          import requests
+
+          url = "http://127.0.0.1:5000/"
+
+          for i in range(30):
+              try:
+                  response = requests.get(url, timeout=2)
+
+                  if response.status_code == 200:
+                      print("MLflow is ready.")
+                      break
+              except requests.exceptions.RequestException:
+                  pass
+
+              time.sleep(2)
+          else:
+              print("MLflow failed to start.")
+              print(open("mlflow.log").read())
+              raise SystemExit(1)
+          PY
+
+      - name: Register model in MLflow
+        run: |
+          python scripts/register_model.py
+
       - name: Start FastAPI server
         run: |
           nohup uvicorn api.app:app \
@@ -57,18 +86,24 @@ jobs:
                   print(response.text)
 
                   if response.status_code == 200:
-                      print("FastAPI is ready.")
-                      break
+                      data = response.json()
+
+                      if data.get("status") == "healthy":
+                          print("FastAPI is ready and model is healthy.")
+                          break
               except requests.exceptions.RequestException:
                   pass
 
               time.sleep(2)
           else:
-              print("FastAPI failed to start.")
+              print("FastAPI failed to become healthy.")
+
               print("\n--- MLflow log ---")
               print(open("mlflow.log").read())
+
               print("\n--- FastAPI log ---")
               print(open("fastapi.log").read())
+
               raise SystemExit(1)
           PY
 
