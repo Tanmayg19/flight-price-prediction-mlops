@@ -29,7 +29,7 @@ jobs:
       - name: Start MLflow server
         run: |
           nohup mlflow server \
-            --host 127.0.0.1 \
+            --host 0.0.0.0 \
             --port 5000 \
             --backend-store-uri sqlite:///notebooks/mlflow.db \
             --default-artifact-root ./notebooks/mlruns \
@@ -110,3 +110,64 @@ jobs:
       - name: Run API tests
         run: |
           pytest -v tests/test_api.py
+
+      - name: Build Docker image
+        run: |
+          docker build -t flight-price-api:ci .
+
+      - name: Run Docker container
+        run: |
+          docker run -d \
+            --name flight_api_ci \
+            --add-host=host.docker.internal:host-gateway \
+            -p 8000:8000 \
+            -e MLFLOW_TRACKING_URI=http://host.docker.internal:5000 \
+            flight-price-api:ci
+
+      - name: Wait for Dockerized FastAPI
+        run: |
+          python - <<'PY'
+          import time
+          import requests
+
+          url = "http://127.0.0.1:8000/health"
+
+          for i in range(30):
+              try:
+                  response = requests.get(url, timeout=2)
+                  print(response.text)
+
+                  if response.status_code == 200:
+                      data = response.json()
+
+                      if data.get("status") == "healthy":
+                          print("Dockerized FastAPI is healthy.")
+                          break
+              except requests.exceptions.RequestException:
+                  pass
+
+              time.sleep(2)
+          else:
+              print("Dockerized FastAPI failed to become healthy.")
+
+              print("\n--- Docker container logs ---")
+              print(
+                  __import__("subprocess")
+                  .check_output(
+                      ["docker", "logs", "flight_api_ci"],
+                      text=True
+                  )
+              )
+
+              raise SystemExit(1)
+          PY
+
+      - name: Run API tests against Docker container
+        run: |
+          pytest -v tests/test_api.py
+
+      - name: Stop Docker container
+        if: always()
+        run: |
+          docker stop flight_api_ci || true
+          docker rm flight_api_ci || true
