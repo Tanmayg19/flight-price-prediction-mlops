@@ -163,7 +163,8 @@ jobs:
           PY
 
       - name: Run API tests against Docker container
-	env: API_URL: http://127.0.0.1:8001
+	env: 
+	  API_URL: http://127.0.0.1:8001
         run: |
           pytest -v tests/test_api.py
 
