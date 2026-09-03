@@ -13,6 +13,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
@@ -51,10 +52,12 @@ jobs:
                   if response.status_code == 200:
                       print("MLflow is ready.")
                       break
+
               except requests.exceptions.RequestException:
                   pass
 
               time.sleep(2)
+
           else:
               print("MLflow failed to start.")
               print(open("mlflow.log").read())
@@ -91,10 +94,12 @@ jobs:
                       if data.get("status") == "healthy":
                           print("FastAPI is ready and model is healthy.")
                           break
+
               except requests.exceptions.RequestException:
                   pass
 
               time.sleep(2)
+
           else:
               print("FastAPI failed to become healthy.")
 
@@ -143,10 +148,12 @@ jobs:
                       if data.get("status") == "healthy":
                           print("Dockerized FastAPI is healthy.")
                           break
+
               except requests.exceptions.RequestException:
                   pass
 
               time.sleep(2)
+
           else:
               print("Dockerized FastAPI failed to become healthy.")
 
@@ -163,8 +170,8 @@ jobs:
           PY
 
       - name: Run API tests against Docker container
-	env: 
-	  API_URL: http://127.0.0.1:8001
+        env:
+          API_URL: http://127.0.0.1:8001
         run: |
           pytest -v tests/test_api.py
 
