@@ -25,7 +25,9 @@ MODEL_NAME = "flight-price-xgboost"
 
 print("Connecting to MLflow...")
 
-mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
+mlflow.set_tracking_uri(
+    MLFLOW_TRACKING_URI
+)
 
 client = MlflowClient()
 
@@ -44,7 +46,7 @@ for attempt in range(30):
 
         break
 
-    except Exception:
+    except Exception as e:
 
         print(
             f"Waiting for MLflow... "
@@ -61,7 +63,7 @@ else:
 
 
 # --------------------------------------------------
-# Create experiment
+# Create experiment if it does not exist
 # --------------------------------------------------
 
 experiment_name = "flight-price-prediction-ci"
@@ -85,6 +87,10 @@ print(
     f"Using experiment: {experiment_name}"
 )
 
+print(
+    f"Experiment ID: {experiment_id}"
+)
+
 
 # --------------------------------------------------
 # Load trained XGBoost model
@@ -94,81 +100,91 @@ print(
     f"Loading model from: {MODEL_PATH}"
 )
 
-model = joblib.load(MODEL_PATH)
+model = joblib.load(
+    MODEL_PATH
+)
+
+print(
+    "XGBoost model loaded successfully."
+)
 
 
 # --------------------------------------------------
-# Log model
+# Log and register model in MLflow
 # --------------------------------------------------
+
+print(
+    "Logging model to MLflow..."
+)
 
 with mlflow.start_run(
     experiment_id=experiment_id,
     run_name="ci-model-registration"
 ):
 
-    mlflow.xgboost.log_model(
+    model_info = mlflow.xgboost.log_model(
         model,
-        name="model"
+        name="model",
+        registered_model_name=MODEL_NAME,
+        await_registration_for=300
     )
 
     run_id = mlflow.active_run().info.run_id
 
-    print(
-        f"Model logged successfully."
-    )
-
-    print(
-        f"Run ID: {run_id}"
-    )
-
 
 # --------------------------------------------------
-# Verify artifact exists
+# Display model information
 # --------------------------------------------------
 
 print(
-    "Checking MLflow artifacts..."
+    "Model logged successfully."
 )
 
-artifacts = client.list_artifacts(
-    run_id,
-    "model"
+print(
+    f"Run ID: {run_id}"
 )
 
-if not artifacts:
+print(
+    f"Model URI: {model_info.model_uri}"
+)
+
+print(
+    f"Model ID: {model_info.model_id}"
+)
+
+print(
+    f"Registered model: {MODEL_NAME}"
+)
+
+print(
+    f"Registered model version: "
+    f"{model_info.registered_model_version}"
+)
+
+
+# --------------------------------------------------
+# Verify registered model
+# --------------------------------------------------
+
+registered_version = (
+    model_info.registered_model_version
+)
+
+if registered_version is None:
 
     raise RuntimeError(
-        "Model artifact was not found after logging."
+        "Model was logged but was not registered "
+        "in the MLflow Model Registry."
     )
 
+
 print(
-    "Model artifact verified successfully."
+    "Model registration verified successfully."
 )
 
 
 # --------------------------------------------------
-# Register model
-# --------------------------------------------------
-
-model_uri = f"runs:/{run_id}/model"
-
-print(
-    f"Registering model from: {model_uri}"
-)
-
-registered = mlflow.register_model(
-    model_uri=model_uri,
-    name=MODEL_NAME
-)
-
-print(
-    f"Registered model: {MODEL_NAME}, "
-    f"version: {registered.version}"
-)
-
-
-# --------------------------------------------------
-# Wait for registration
+# Verify model version exists
 # --------------------------------------------------
 
 for attempt in range(30):
@@ -177,21 +193,29 @@ for attempt in range(30):
 
         version = client.get_model_version(
             name=MODEL_NAME,
-            version=registered.version
+            version=str(registered_version)
         )
 
         if version.status == "READY":
 
             print(
-                f"Model version {registered.version} "
+                f"Model version {registered_version} "
                 f"is READY."
             )
 
             break
 
-    except Exception:
+        print(
+            f"Model version status: "
+            f"{version.status}"
+        )
 
-        pass
+    except Exception as e:
+
+        print(
+            f"Waiting for registered model... "
+            f"attempt {attempt + 1}/30"
+        )
 
     time.sleep(2)
 
@@ -202,6 +226,30 @@ else:
     )
 
 
+# --------------------------------------------------
+# Final confirmation
+# --------------------------------------------------
+
 print(
-    "Model registration completed successfully."
+    "=============================================="
+)
+
+print(
+    "MLflow model registration completed successfully."
+)
+
+print(
+    f"Model: {MODEL_NAME}"
+)
+
+print(
+    f"Version: {registered_version}"
+)
+
+print(
+    f"Model URI: models:/{MODEL_NAME}/{registered_version}"
+)
+
+print(
+    "=============================================="
 )
