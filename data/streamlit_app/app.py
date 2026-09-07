@@ -1,22 +1,21 @@
 # ============================================================
-# ✈️ FLIGHT PRICE PREDICTION APPLICATION
+# FLIGHT PRICE PREDICTION APPLICATION
 # ============================================================
 # Streamlit + REST API + MLflow + XGBoost
 # ============================================================
+
 
 # ------------------------------------------------------------
 # 1. IMPORT LIBRARIES
 # ------------------------------------------------------------
 
-import streamlit as st
-import mlflow
-import mlflow.xgboost
-import pandas as pd
-import joblib
-import requests
 import os
-
 from pathlib import Path
+
+import joblib
+import pandas as pd
+import requests
+import streamlit as st
 
 
 # ============================================================
@@ -35,21 +34,54 @@ st.set_page_config(
 # 3. PROJECT PATHS
 # ============================================================
 
-BASE_DIR = Path(__file__).resolve().parents[2]
+# This application can run in two environments:
+#
+# Local:
+# project/data/streamlit_app/app.py
+# project/models/feature_columns.pkl
+#
+# Docker:
+# /app/app.py
+# /app/models/feature_columns.pkl
 
-MODEL_FEATURES_PATH = (
-    BASE_DIR / "models" / "feature_columns.pkl"
+CURRENT_DIR = Path(__file__).resolve().parent
+
+docker_model_path = (
+    CURRENT_DIR
+    / "models"
+    / "feature_columns.pkl"
 )
 
+local_model_path = (
+    CURRENT_DIR.parent.parent
+    / "models"
+    / "feature_columns.pkl"
+)
 
-# --------------------------------------------------
-# FastAPI Configuration
-# --------------------------------------------------
+if docker_model_path.exists():
+
+    MODEL_FEATURES_PATH = docker_model_path
+
+else:
+
+    MODEL_FEATURES_PATH = local_model_path
+
+
+# ============================================================
+# 4. FASTAPI CONFIGURATION
+# ============================================================
+
+# Docker Compose:
+# API_URL=http://api:8000
+#
+# Local:
+# http://127.0.0.1:8000
 
 API_URL = os.getenv(
     "API_URL",
     "http://127.0.0.1:8000"
 )
+
 
 # ============================================================
 # 5. LOAD FEATURE COLUMNS
@@ -81,28 +113,7 @@ except Exception as e:
 
 
 # ============================================================
-# 6. APPLICATION TITLE
-# ============================================================
-
-st.title("✈️ Flight Price Predictor")
-
-st.markdown(
-    """
-    ### ML-powered flight price estimation
-
-    Enter your flight details below and use our
-    **XGBoost machine learning model** to estimate
-    the flight price.
-
-    The prediction request is sent through a
-    **REST API**, while the model is managed using
-    **MLflow Model Registry**.
-    """
-)
-
-
-# ============================================================
-# 7. CHECK FASTAPI CONNECTION
+# 6. FASTAPI HEALTH CHECK
 # ============================================================
 
 def check_api_health():
@@ -128,6 +139,55 @@ def check_api_health():
 health_data = check_api_health()
 
 
+# ------------------------------------------------------------
+# Active model information
+# ------------------------------------------------------------
+
+if health_data:
+
+    ACTIVE_MODEL_NAME = health_data.get(
+        "model_name",
+        "Unknown"
+    )
+
+    ACTIVE_MODEL_VERSION = health_data.get(
+        "model_version",
+        "Unknown"
+    )
+
+    ACTIVE_MODEL_STATUS = health_data.get(
+        "model_status",
+        "Unknown"
+    )
+
+else:
+
+    ACTIVE_MODEL_NAME = "Unknown"
+    ACTIVE_MODEL_VERSION = "Unknown"
+    ACTIVE_MODEL_STATUS = "Unknown"
+
+
+# ============================================================
+# 7. APPLICATION TITLE
+# ============================================================
+
+st.title("✈️ Flight Price Predictor")
+
+st.markdown(
+    """
+    ### ML-powered flight price estimation
+
+    Enter your flight details below and use our
+    **XGBoost machine learning model** to estimate
+    the flight price.
+
+    The prediction request is sent through a
+    **REST API**, while the model is managed using
+    **MLflow Model Registry**.
+    """
+)
+
+
 # ============================================================
 # 8. SIDEBAR
 # ============================================================
@@ -141,7 +201,7 @@ with st.sidebar:
     page = st.radio(
         "Navigate",
         [
-            "🏠 Prediction",
+            "🔮 Prediction",
             "📊 Model Insights",
             "ℹ️ About"
         ]
@@ -149,7 +209,9 @@ with st.sidebar:
 
     st.markdown("---")
 
+    # --------------------------------------------------------
     # REST API status
+    # --------------------------------------------------------
 
     if health_data:
 
@@ -160,11 +222,11 @@ with st.sidebar:
             )
 
             st.caption(
-                f"Model: {health_data.get('model_name')}"
+                f"Model: {ACTIVE_MODEL_NAME}"
             )
 
             st.caption(
-                f"Version: {health_data.get('model_version')}"
+                f"Version: {ACTIVE_MODEL_VERSION}"
             )
 
         else:
@@ -187,13 +249,14 @@ with st.sidebar:
 
 
 # ============================================================
-# ============================================================
 # PAGE 1 — PREDICTION
 # ============================================================
 
-if page == "🏠 Prediction":
+if page == "🔮 Prediction":
 
-    st.header("✈️ Flight Price Prediction")
+    st.header(
+        "✈️ Flight Price Prediction"
+    )
 
     st.markdown(
         """
@@ -202,6 +265,7 @@ if page == "🏠 Prediction":
         the flight price.
         """
     )
+
 
     # --------------------------------------------------------
     # CHECK FASTAPI CONNECTION
@@ -216,14 +280,21 @@ if page == "🏠 Prediction":
 
         if health_response.status_code == 200:
 
-            health_data = health_response.json()
+            prediction_health_data = (
+                health_response.json()
+            )
 
-            if health_data.get("status") == "healthy":
+            if (
+                prediction_health_data.get("status")
+                == "healthy"
+            ):
 
                 st.success(
                     f"✅ REST API Connected | "
-                    f"Model: {health_data.get('model_name')} | "
-                    f"Version: {health_data.get('model_version')}"
+                    f"Model: "
+                    f"{prediction_health_data.get('model_name')} | "
+                    f"Version: "
+                    f"{prediction_health_data.get('model_version')}"
                 )
 
             else:
@@ -242,18 +313,25 @@ if page == "🏠 Prediction":
     except requests.exceptions.RequestException:
 
         st.error(
-            "❌ Cannot connect to FastAPI.\n\n"
-            "Please make sure the API is running with:\n\n"
-            "`uvicorn api.app:app --reload --port 8000`"
+            """
+            ❌ Cannot connect to FastAPI.
+
+            Please make sure the API is running.
+            """
         )
+
 
     # ========================================================
     # FLIGHT INPUT FORM
     # ========================================================
 
-    st.subheader("📝 Enter Flight Details")
+    st.subheader(
+        "📝 Enter Flight Details"
+    )
 
-    with st.form("flight_prediction_form"):
+    with st.form(
+        "flight_prediction_form"
+    ):
 
         # ----------------------------------------------------
         # TRAVEL DATE
@@ -269,11 +347,13 @@ if page == "🏠 Prediction":
             "engineering because EDA showed minimal impact on price."
         )
 
+
         # ----------------------------------------------------
         # TWO-COLUMN INPUT LAYOUT
         # ----------------------------------------------------
 
         col1, col2 = st.columns(2)
+
 
         # ====================================================
         # LEFT COLUMN
@@ -294,6 +374,7 @@ if page == "🏠 Prediction":
                 ]
             )
 
+
             # ------------------------------------------------
             # AIRLINE AGENCY
             # ------------------------------------------------
@@ -306,6 +387,7 @@ if page == "🏠 Prediction":
                     "Rainbow"
                 ]
             )
+
 
             # ------------------------------------------------
             # ORIGIN
@@ -325,6 +407,7 @@ if page == "🏠 Prediction":
                     "Rio de Janeiro (RJ)"
                 ]
             )
+
 
         # ====================================================
         # RIGHT COLUMN
@@ -351,6 +434,7 @@ if page == "🏠 Prediction":
                 ]
             )
 
+
             # ------------------------------------------------
             # DISTANCE
             # ------------------------------------------------
@@ -361,6 +445,7 @@ if page == "🏠 Prediction":
                 value=500.0,
                 step=10.0
             )
+
 
             # ------------------------------------------------
             # FLIGHT TIME
@@ -373,16 +458,20 @@ if page == "🏠 Prediction":
                 step=0.1
             )
 
+
         # ----------------------------------------------------
         # PREDICTION BUTTON
         # ----------------------------------------------------
 
         st.markdown("")
 
-        predict_button = st.form_submit_button(
-            "🔮 Predict Flight Price",
-            use_container_width=True
+        predict_button = (
+            st.form_submit_button(
+                "🔮 Predict Flight Price",
+                use_container_width=True
+            )
         )
+
 
     # ========================================================
     # CREATE MODEL INPUT AND CALL FASTAPI
@@ -402,13 +491,19 @@ if page == "🏠 Prediction":
                 columns=feature_columns
             )
 
+
             # ------------------------------------------------
             # NUMERICAL FEATURES
             # ------------------------------------------------
 
-            input_data["time"] = float(travel_time)
+            input_data["time"] = float(
+                travel_time
+            )
 
-            input_data["distance"] = float(distance)
+            input_data["distance"] = float(
+                distance
+            )
+
 
             # ------------------------------------------------
             # FLIGHT TYPE
@@ -427,42 +522,74 @@ if page == "🏠 Prediction":
             }
 
             selected_flight_type = (
-                flight_type_column[flight_type]
+                flight_type_column[
+                    flight_type
+                ]
             )
 
-            if selected_flight_type in input_data.columns:
+            if (
+                selected_flight_type
+                in input_data.columns
+            ):
 
-                input_data[selected_flight_type] = 1
+                input_data[
+                    selected_flight_type
+                ] = 1
+
 
             # ------------------------------------------------
             # AIRLINE AGENCY
             # ------------------------------------------------
 
-            agency_column = f"agency_{agency}"
+            agency_column = (
+                f"agency_{agency}"
+            )
 
-            if agency_column in input_data.columns:
+            if (
+                agency_column
+                in input_data.columns
+            ):
 
-                input_data[agency_column] = 1
+                input_data[
+                    agency_column
+                ] = 1
+
 
             # ------------------------------------------------
             # ORIGIN
             # ------------------------------------------------
 
-            origin_column = f"from_{origin}"
+            origin_column = (
+                f"from_{origin}"
+            )
 
-            if origin_column in input_data.columns:
+            if (
+                origin_column
+                in input_data.columns
+            ):
 
-                input_data[origin_column] = 1
+                input_data[
+                    origin_column
+                ] = 1
+
 
             # ------------------------------------------------
             # DESTINATION
             # ------------------------------------------------
 
-            destination_column = f"to_{destination}"
+            destination_column = (
+                f"to_{destination}"
+            )
 
-            if destination_column in input_data.columns:
+            if (
+                destination_column
+                in input_data.columns
+            ):
 
-                input_data[destination_column] = 1
+                input_data[
+                    destination_column
+                ] = 1
+
 
             # ------------------------------------------------
             # VERIFY FEATURE COUNT
@@ -472,20 +599,24 @@ if page == "🏠 Prediction":
 
                 st.error(
                     f"❌ Expected 26 model features, "
-                    f"but found {len(input_data.columns)}."
+                    f"but found "
+                    f"{len(input_data.columns)}."
                 )
 
                 st.stop()
+
 
             # ------------------------------------------------
             # CONVERT MODEL INPUT TO DICTIONARY
             # ------------------------------------------------
 
             features_dict = (
-                input_data.iloc[0]
+                input_data
+                .iloc[0]
                 .astype(float)
                 .to_dict()
             )
+
 
             # ------------------------------------------------
             # CREATE API PAYLOAD
@@ -495,12 +626,14 @@ if page == "🏠 Prediction":
                 "features": features_dict
             }
 
+
             # ------------------------------------------------
             # SEND REQUEST TO FASTAPI
             # ------------------------------------------------
 
             with st.spinner(
-                "🔄 Sending request to the prediction API..."
+                "🔄 Sending request "
+                "to the prediction API..."
             ):
 
                 response = requests.post(
@@ -508,6 +641,7 @@ if page == "🏠 Prediction":
                     json=payload,
                     timeout=30
                 )
+
 
             # =================================================
             # PROCESS API RESPONSE
@@ -518,8 +652,11 @@ if page == "🏠 Prediction":
                 result = response.json()
 
                 predicted_price = float(
-                    result["predicted_price"]
+                    result[
+                        "predicted_price"
+                    ]
                 )
+
 
                 # ------------------------------------------------
                 # SUCCESS MESSAGE
@@ -531,6 +668,7 @@ if page == "🏠 Prediction":
 
                 st.markdown("---")
 
+
                 # ------------------------------------------------
                 # PREDICTION RESULT
                 # ------------------------------------------------
@@ -539,9 +677,12 @@ if page == "🏠 Prediction":
                     "💰 Estimated Flight Price"
                 )
 
-                result_col1, result_col2, result_col3 = (
-                    st.columns(3)
-                )
+                (
+                    result_col1,
+                    result_col2,
+                    result_col3
+                ) = st.columns(3)
+
 
                 with result_col1:
 
@@ -550,6 +691,7 @@ if page == "🏠 Prediction":
                         f"${predicted_price:,.2f}"
                     )
 
+
                 with result_col2:
 
                     st.metric(
@@ -557,12 +699,14 @@ if page == "🏠 Prediction":
                         "XGBoost"
                     )
 
+
                 with result_col3:
 
                     st.metric(
                         "MLflow Version",
-                        "1"
+                        ACTIVE_MODEL_VERSION
                     )
+
 
                 # ------------------------------------------------
                 # PREDICTION SUMMARY
@@ -574,9 +718,11 @@ if page == "🏠 Prediction":
                     "📋 Prediction Summary"
                 )
 
-                summary_col1, summary_col2 = (
-                    st.columns(2)
-                )
+                (
+                    summary_col1,
+                    summary_col2
+                ) = st.columns(2)
+
 
                 with summary_col1:
 
@@ -594,6 +740,7 @@ if page == "🏠 Prediction":
                         f"**Airline Agency:** "
                         f"{agency}"
                     )
+
 
                 with summary_col2:
 
@@ -617,6 +764,7 @@ if page == "🏠 Prediction":
                         f"{travel_time:.1f}"
                     )
 
+
                 # ------------------------------------------------
                 # API INFORMATION
                 # ------------------------------------------------
@@ -625,7 +773,10 @@ if page == "🏠 Prediction":
                     "🔗 REST API Response"
                 ):
 
-                    st.json(result)
+                    st.json(
+                        result
+                    )
+
 
                 # ------------------------------------------------
                 # MODEL INPUT
@@ -640,19 +791,18 @@ if page == "🏠 Prediction":
                         use_container_width=True
                     )
 
+
             else:
 
-                # ------------------------------------------------
-                # API ERROR
-                # ------------------------------------------------
-
                 st.error(
-                    "❌ Prediction API returned an error."
+                    "❌ Prediction API "
+                    "returned an error."
                 )
 
                 st.code(
                     response.text
                 )
+
 
         # =====================================================
         # CONNECTION ERROR
@@ -664,11 +814,10 @@ if page == "🏠 Prediction":
                 """
                 ❌ Could not connect to the FastAPI server.
 
-                Please make sure FastAPI is running:
-
-                `uvicorn api.app:app --reload --port 8000`
+                Please make sure FastAPI is running.
                 """
             )
+
 
         # =====================================================
         # TIMEOUT ERROR
@@ -677,8 +826,10 @@ if page == "🏠 Prediction":
         except requests.exceptions.Timeout:
 
             st.error(
-                "❌ The prediction API request timed out."
+                "❌ The prediction API "
+                "request timed out."
             )
+
 
         # =====================================================
         # OTHER ERRORS
@@ -693,14 +844,16 @@ if page == "🏠 Prediction":
 
             st.exception(e)
 
+
 # ============================================================
 # PAGE 2 — MODEL INSIGHTS
 # ============================================================
 
 elif page == "📊 Model Insights":
 
-    st.header("📊 Model Insights")
-
+    st.header(
+        "📊 Model Insights"
+    )
 
     st.markdown(
         """
@@ -715,33 +868,6 @@ elif page == "📊 Model Insights":
 
 
     # --------------------------------------------------------
-    # GET MODEL HEALTH
-    # --------------------------------------------------------
-
-    try:
-
-        health_response = requests.get(
-            f"{API_URL}/health",
-            timeout=5
-        )
-
-
-        if health_response.status_code == 200:
-
-            health_data = health_response.json()
-
-
-        else:
-
-            health_data = None
-
-
-    except Exception:
-
-        health_data = None
-
-
-    # --------------------------------------------------------
     # MODEL STATUS
     # --------------------------------------------------------
 
@@ -749,22 +875,20 @@ elif page == "📊 Model Insights":
         "🟢 Model Status"
     )
 
-
     if health_data:
 
-        status_col1, status_col2, status_col3 = (
-            st.columns(3)
-        )
+        (
+            status_col1,
+            status_col2,
+            status_col3
+        ) = st.columns(3)
 
 
         with status_col1:
 
             st.metric(
                 "Status",
-                health_data.get(
-                    "model_status",
-                    "Unknown"
-                )
+                ACTIVE_MODEL_STATUS
             )
 
 
@@ -772,10 +896,7 @@ elif page == "📊 Model Insights":
 
             st.metric(
                 "Model",
-                health_data.get(
-                    "model_name",
-                    "Unknown"
-                )
+                ACTIVE_MODEL_NAME
             )
 
 
@@ -783,17 +904,14 @@ elif page == "📊 Model Insights":
 
             st.metric(
                 "Version",
-                health_data.get(
-                    "model_version",
-                    "Unknown"
-                )
+                ACTIVE_MODEL_VERSION
             )
-
 
     else:
 
         st.error(
-            "Unable to retrieve model status from FastAPI."
+            "Unable to retrieve model "
+            "status from FastAPI."
         )
 
 
@@ -807,7 +925,6 @@ elif page == "📊 Model Insights":
     st.subheader(
         "📈 Model Performance"
     )
-
 
     metric1, metric2, metric3 = (
         st.columns(3)
@@ -838,6 +955,11 @@ elif page == "📊 Model Insights":
         )
 
 
+    st.caption(
+        "Performance values shown above correspond "
+        "to the final tuned model evaluation."
+    )
+
     st.markdown("---")
 
 
@@ -848,7 +970,6 @@ elif page == "📊 Model Insights":
     st.subheader(
         "🤖 Model Information"
     )
-
 
     info_col1, info_col2 = (
         st.columns(2)
@@ -874,7 +995,8 @@ elif page == "📊 Model Insights":
     with info_col2:
 
         st.write(
-            "**Model Version:** 1"
+            f"**Model Version:** "
+            f"{ACTIVE_MODEL_VERSION}"
         )
 
         st.write(
@@ -883,7 +1005,8 @@ elif page == "📊 Model Insights":
         )
 
         st.write(
-            "**Model Status:** 🟢 READY"
+            f"**Model Status:** "
+            f"{ACTIVE_MODEL_STATUS}"
         )
 
 
@@ -898,7 +1021,6 @@ elif page == "📊 Model Insights":
         "🌐 REST API"
     )
 
-
     api_col1, api_col2 = (
         st.columns(2)
     )
@@ -910,16 +1032,15 @@ elif page == "📊 Model Insights":
             "**API Base URL:**"
         )
 
-        st.code(
+        st.write(
             API_URL
         )
-
 
         st.write(
             "**Health Endpoint:**"
         )
 
-        st.code(
+        st.write(
             f"{API_URL}/health"
         )
 
@@ -930,16 +1051,15 @@ elif page == "📊 Model Insights":
             "**Prediction Endpoint:**"
         )
 
-        st.code(
+        st.write(
             f"{API_URL}/predict"
         )
-
 
         st.write(
             "**API Documentation:**"
         )
 
-        st.code(
+        st.write(
             f"{API_URL}/docs"
         )
 
@@ -955,9 +1075,8 @@ elif page == "📊 Model Insights":
         "🔬 MLflow Integration"
     )
 
-
     st.markdown(
-        """
+        f"""
         MLflow is responsible for:
 
         - Experiment tracking
@@ -969,17 +1088,17 @@ elif page == "📊 Model Insights":
 
         The registered model is:
 
-        **`flight-price-xgboost` — Version 1**
+        **`flight-price-xgboost` — Version {ACTIVE_MODEL_VERSION}**
         """
     )
-
 
     st.write(
         "**MLflow Model URI:**"
     )
 
-    st.code(
-        "models:/flight-price-xgboost/1"
+    st.write(
+        f"models:/flight-price-xgboost/"
+        f"{ACTIVE_MODEL_VERSION}"
     )
 
 
@@ -994,11 +1113,10 @@ elif page == "📊 Model Insights":
         "🧩 Model Features"
     )
 
-
     st.write(
-        f"The model uses **{len(feature_columns)} features**."
+        f"The model uses "
+        f"**{len(feature_columns)} features**."
     )
-
 
     with st.expander(
         "View all model features"
@@ -1023,7 +1141,6 @@ elif page == "ℹ️ About":
     st.header(
         "ℹ️ About This Project"
     )
-
 
     st.markdown(
         """
@@ -1052,7 +1169,6 @@ elif page == "ℹ️ About":
     st.subheader(
         "🛠️ Technology Stack"
     )
-
 
     tech_col1, tech_col2 = (
         st.columns(2)
@@ -1085,6 +1201,10 @@ elif page == "ℹ️ About":
             - REST API
             - Streamlit
             - Docker
+            - Apache Airflow
+            - Kubernetes manifests
+            - Jenkins pipeline configuration
+            - GitHub Actions
             """
         )
 
@@ -1099,7 +1219,6 @@ elif page == "ℹ️ About":
     st.subheader(
         "🏗️ Project Architecture"
     )
-
 
     st.markdown(
         """
@@ -1139,9 +1258,8 @@ elif page == "ℹ️ About":
         "🔬 MLflow Integration"
     )
 
-
     st.markdown(
-        """
+        f"""
         MLflow is used for:
 
         - Experiment tracking
@@ -1154,7 +1272,7 @@ elif page == "ℹ️ About":
 
         The registered model used by the REST API is:
 
-        **`flight-price-xgboost` — Version 1**
+        **`flight-price-xgboost` — Version {ACTIVE_MODEL_VERSION}**
         """
     )
 
@@ -1169,7 +1287,6 @@ elif page == "ℹ️ About":
     st.subheader(
         "🌐 REST API Integration"
     )
-
 
     st.markdown(
         """
@@ -1197,7 +1314,6 @@ elif page == "ℹ️ About":
         "📊 Model Summary"
     )
 
-
     st.write(
         """
         The final tuned XGBoost model achieved an
@@ -1209,7 +1325,6 @@ elif page == "ℹ️ About":
 
 
     st.markdown("---")
-
 
     st.caption(
         "Flight Price Prediction | "

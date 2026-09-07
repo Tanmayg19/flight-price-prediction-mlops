@@ -1,29 +1,46 @@
 import os
 import time
+
 import joblib
 import mlflow
 import mlflow.xgboost
 from mlflow.tracking import MlflowClient
 
 
-# --------------------------------------------------
-# Configuration
-# --------------------------------------------------
+# ============================================================
+# CONFIGURATION
+# ============================================================
 
 MLFLOW_TRACKING_URI = os.getenv(
     "MLFLOW_TRACKING_URI",
     "http://127.0.0.1:5000"
 )
 
-MODEL_PATH = "models/xgb_flight_price_model.pkl"
-MODEL_NAME = "flight-price-xgboost"
+EXPERIMENT_NAME = os.getenv(
+    "MLFLOW_EXPERIMENT_NAME",
+    "flight-price-prediction-ci"
+)
+
+MODEL_PATH = os.getenv(
+    "MODEL_PATH",
+    "models/xgb_flight_price_model.pkl"
+)
+
+MODEL_NAME = os.getenv(
+    "MLFLOW_MODEL_NAME",
+    "flight-price-xgboost"
+)
 
 
-# --------------------------------------------------
-# Connect to MLflow
-# --------------------------------------------------
+# ============================================================
+# CONNECT TO MLFLOW
+# ============================================================
 
 print("Connecting to MLflow...")
+
+print(
+    f"Tracking URI: {MLFLOW_TRACKING_URI}"
+)
 
 mlflow.set_tracking_uri(
     MLFLOW_TRACKING_URI
@@ -32,9 +49,9 @@ mlflow.set_tracking_uri(
 client = MlflowClient()
 
 
-# --------------------------------------------------
-# Wait for MLflow
-# --------------------------------------------------
+# ============================================================
+# WAIT FOR MLFLOW SERVER
+# ============================================================
 
 for attempt in range(30):
 
@@ -42,11 +59,13 @@ for attempt in range(30):
 
         client.search_experiments()
 
-        print("MLflow is ready.")
+        print(
+            "MLflow is ready."
+        )
 
         break
 
-    except Exception as e:
+    except Exception:
 
         print(
             f"Waiting for MLflow... "
@@ -62,43 +81,82 @@ else:
     )
 
 
-# --------------------------------------------------
-# Create experiment if it does not exist
-# --------------------------------------------------
-
-experiment_name = "flight-price-prediction-ci"
+# ============================================================
+# GET OR CREATE EXPERIMENT
+# ============================================================
 
 experiment = client.get_experiment_by_name(
-    experiment_name
+    EXPERIMENT_NAME
 )
 
 if experiment is None:
 
-    experiment_id = client.create_experiment(
-        experiment_name
+    print(
+        f"Experiment '{EXPERIMENT_NAME}' "
+        "does not exist."
+    )
+
+    print(
+        "Creating MLflow experiment..."
+    )
+
+    experiment_id = (
+        client.create_experiment(
+            EXPERIMENT_NAME
+        )
+    )
+
+    experiment = client.get_experiment(
+        experiment_id
+    )
+
+    print(
+        "Experiment created successfully."
     )
 
 else:
 
-    experiment_id = experiment.experiment_id
+    experiment_id = (
+        experiment.experiment_id
+    )
 
+    print(
+        "Using existing MLflow experiment."
+    )
+
+
+# ============================================================
+# DISPLAY EXPERIMENT INFORMATION
+# ============================================================
 
 print(
-    f"Using experiment: {experiment_name}"
+    f"Experiment: {EXPERIMENT_NAME}"
 )
 
 print(
     f"Experiment ID: {experiment_id}"
 )
 
+print(
+    f"Artifact location: "
+    f"{experiment.artifact_location}"
+)
 
-# --------------------------------------------------
-# Load trained XGBoost model
-# --------------------------------------------------
+
+# ============================================================
+# LOAD TRAINED MODEL
+# ============================================================
 
 print(
     f"Loading model from: {MODEL_PATH}"
 )
+
+if not os.path.exists(MODEL_PATH):
+
+    raise FileNotFoundError(
+        f"Model file not found: {MODEL_PATH}"
+    )
+
 
 model = joblib.load(
     MODEL_PATH
@@ -109,17 +167,17 @@ print(
 )
 
 
-# --------------------------------------------------
-# Log and register model in MLflow
-# --------------------------------------------------
+# ============================================================
+# LOG AND REGISTER MODEL
+# ============================================================
 
 print(
-    "Logging model to MLflow..."
+    "Logging and registering model in MLflow..."
 )
 
 with mlflow.start_run(
     experiment_id=experiment_id,
-    run_name="ci-model-registration"
+    run_name="model-registration"
 ):
 
     model_info = mlflow.xgboost.log_model(
@@ -129,12 +187,26 @@ with mlflow.start_run(
         await_registration_for=300
     )
 
-    run_id = mlflow.active_run().info.run_id
+    run_id = (
+        mlflow.active_run().info.run_id
+    )
 
 
-# --------------------------------------------------
-# Display model information
-# --------------------------------------------------
+# ============================================================
+# VERIFY REGISTERED MODEL INFORMATION
+# ============================================================
+
+registered_version = (
+    model_info.registered_model_version
+)
+
+if registered_version is None:
+
+    raise RuntimeError(
+        "Model was logged but was not "
+        "registered in MLflow Model Registry."
+    )
+
 
 print(
     "Model logged successfully."
@@ -149,43 +221,18 @@ print(
 )
 
 print(
-    f"Model ID: {model_info.model_id}"
-)
-
-print(
     f"Registered model: {MODEL_NAME}"
 )
 
 print(
     f"Registered model version: "
-    f"{model_info.registered_model_version}"
+    f"{registered_version}"
 )
 
 
-# --------------------------------------------------
-# Verify registered model
-# --------------------------------------------------
-
-registered_version = (
-    model_info.registered_model_version
-)
-
-if registered_version is None:
-
-    raise RuntimeError(
-        "Model was logged but was not registered "
-        "in the MLflow Model Registry."
-    )
-
-
-print(
-    "Model registration verified successfully."
-)
-
-
-# --------------------------------------------------
-# Verify model version exists
-# --------------------------------------------------
+# ============================================================
+# WAIT FOR REGISTERED MODEL TO BECOME READY
+# ============================================================
 
 for attempt in range(30):
 
@@ -193,14 +240,16 @@ for attempt in range(30):
 
         version = client.get_model_version(
             name=MODEL_NAME,
-            version=str(registered_version)
+            version=str(
+                registered_version
+            )
         )
 
         if version.status == "READY":
 
             print(
-                f"Model version {registered_version} "
-                f"is READY."
+                f"Model version "
+                f"{registered_version} is READY."
             )
 
             break
@@ -210,7 +259,7 @@ for attempt in range(30):
             f"{version.status}"
         )
 
-    except Exception as e:
+    except Exception:
 
         print(
             f"Waiting for registered model... "
@@ -226,16 +275,21 @@ else:
     )
 
 
-# --------------------------------------------------
-# Final confirmation
-# --------------------------------------------------
+# ============================================================
+# FINAL CONFIRMATION
+# ============================================================
 
 print(
     "=============================================="
 )
 
 print(
-    "MLflow model registration completed successfully."
+    "MLflow model registration "
+    "completed successfully."
+)
+
+print(
+    f"Experiment: {EXPERIMENT_NAME}"
 )
 
 print(
@@ -247,7 +301,8 @@ print(
 )
 
 print(
-    f"Model URI: models:/{MODEL_NAME}/{registered_version}"
+    f"Model URI: "
+    f"models:/{MODEL_NAME}/{registered_version}"
 )
 
 print(

@@ -4,27 +4,31 @@ on:
   push:
     branches:
       - main
+
   pull_request:
     branches:
       - main
 
+
 jobs:
+
   test:
+
     runs-on: ubuntu-latest
 
     steps:
 
-      # --------------------------------------------------
-      # 1. Checkout repository
-      # --------------------------------------------------
+      # ======================================================
+      # 1. CHECKOUT REPOSITORY
+      # ======================================================
 
       - name: Checkout repository
         uses: actions/checkout@v4
 
 
-      # --------------------------------------------------
-      # 2. Set up Python
-      # --------------------------------------------------
+      # ======================================================
+      # 2. SET UP PYTHON
+      # ======================================================
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -32,9 +36,9 @@ jobs:
           python-version: "3.11"
 
 
-      # --------------------------------------------------
-      # 3. Install dependencies
-      # --------------------------------------------------
+      # ======================================================
+      # 3. INSTALL DEPENDENCIES
+      # ======================================================
 
       - name: Install dependencies
         run: |
@@ -42,9 +46,9 @@ jobs:
           pip install -r requirements-docker.txt
 
 
-      # --------------------------------------------------
-      # 4. Start MLflow server
-      # --------------------------------------------------
+      # ======================================================
+      # 4. START MLFLOW SERVER
+      # ======================================================
 
       - name: Start MLflow server
         run: |
@@ -61,9 +65,9 @@ jobs:
             > mlflow.log 2>&1 &
 
 
-      # --------------------------------------------------
-      # 5. Wait for MLflow
-      # --------------------------------------------------
+      # ======================================================
+      # 5. WAIT FOR MLFLOW
+      # ======================================================
 
       - name: Wait for MLflow
         run: |
@@ -74,7 +78,9 @@ jobs:
           url = "http://127.0.0.1:5000/"
 
           for i in range(30):
+
               try:
+
                   response = requests.get(
                       url,
                       timeout=2
@@ -86,10 +92,15 @@ jobs:
                   )
 
                   if response.status_code == 200:
-                      print("MLflow is ready.")
+
+                      print(
+                          "MLflow is ready."
+                      )
+
                       break
 
               except requests.exceptions.RequestException:
+
                   print(
                       f"Waiting for MLflow... "
                       f"attempt {i + 1}/30"
@@ -98,29 +109,44 @@ jobs:
               time.sleep(2)
 
           else:
-              print("MLflow failed to start.")
 
-              print("\n--- MLflow log ---")
-              print(open("mlflow.log").read())
+              print(
+                  "MLflow failed to start."
+              )
+
+              print(
+                  "\n--- MLflow log ---"
+              )
+
+              print(
+                  open("mlflow.log").read()
+              )
 
               raise SystemExit(1)
+
           PY
 
 
-      # --------------------------------------------------
-      # 6. Register model in MLflow
-      # --------------------------------------------------
+      # ======================================================
+      # 6. REGISTER MODEL IN MLFLOW
+      # ======================================================
 
       - name: Register model in MLflow
+        env:
+          MLFLOW_TRACKING_URI: http://127.0.0.1:5000
+          MLFLOW_EXPERIMENT_NAME: flight-price-prediction-ci
         run: |
           python scripts/register_model.py
 
 
-      # --------------------------------------------------
-      # 7. Start FastAPI server
-      # --------------------------------------------------
+      # ======================================================
+      # 7. START FASTAPI SERVER
+      # ======================================================
 
       - name: Start FastAPI server
+        env:
+          MLFLOW_TRACKING_URI: http://127.0.0.1:5000
+          MLFLOW_MODEL_VERSION: "1"
         run: |
           nohup uvicorn api.app:app \
             --host 127.0.0.1 \
@@ -128,9 +154,9 @@ jobs:
             > fastapi.log 2>&1 &
 
 
-      # --------------------------------------------------
-      # 8. Wait for FastAPI
-      # --------------------------------------------------
+      # ======================================================
+      # 8. WAIT FOR FASTAPI
+      # ======================================================
 
       - name: Wait for FastAPI
         run: |
@@ -141,7 +167,9 @@ jobs:
           url = "http://127.0.0.1:8000/health"
 
           for i in range(30):
+
               try:
+
                   response = requests.get(
                       url,
                       timeout=2
@@ -153,16 +181,20 @@ jobs:
                   )
 
                   if response.status_code == 200:
+
                       data = response.json()
 
                       if data.get("status") == "healthy":
+
                           print(
                               "FastAPI is ready "
                               "and model is healthy."
                           )
+
                           break
 
               except requests.exceptions.RequestException:
+
                   print(
                       f"Waiting for FastAPI... "
                       f"attempt {i + 1}/30"
@@ -171,32 +203,46 @@ jobs:
               time.sleep(2)
 
           else:
+
               print(
                   "FastAPI failed to become healthy."
               )
 
-              print("\n--- MLflow log ---")
-              print(open("mlflow.log").read())
+              print(
+                  "\n--- MLflow log ---"
+              )
 
-              print("\n--- FastAPI log ---")
-              print(open("fastapi.log").read())
+              print(
+                  open("mlflow.log").read()
+              )
+
+              print(
+                  "\n--- FastAPI log ---"
+              )
+
+              print(
+                  open("fastapi.log").read()
+              )
 
               raise SystemExit(1)
+
           PY
 
 
-      # --------------------------------------------------
-      # 9. Run API tests
-      # --------------------------------------------------
+      # ======================================================
+      # 9. RUN API TESTS
+      # ======================================================
 
       - name: Run API tests
+        env:
+          EXPECTED_MODEL_VERSION: "1"
         run: |
           pytest -v tests/test_api.py
 
 
-      # --------------------------------------------------
-      # 10. Build Docker image
-      # --------------------------------------------------
+      # ======================================================
+      # 10. BUILD DOCKER IMAGE
+      # ======================================================
 
       - name: Build Docker image
         run: |
@@ -205,9 +251,9 @@ jobs:
             .
 
 
-      # --------------------------------------------------
-      # 11. Run Docker container
-      # --------------------------------------------------
+      # ======================================================
+      # 11. RUN DOCKERIZED FASTAPI
+      # ======================================================
 
       - name: Run Docker container
         run: |
@@ -216,12 +262,13 @@ jobs:
             --add-host=host.docker.internal:host-gateway \
             -p 8001:8000 \
             -e MLFLOW_TRACKING_URI=http://host.docker.internal:5000 \
+            -e MLFLOW_MODEL_VERSION=1 \
             flight-price-api:ci
 
 
-      # --------------------------------------------------
-      # 12. Wait for Dockerized FastAPI
-      # --------------------------------------------------
+      # ======================================================
+      # 12. WAIT FOR DOCKERIZED FASTAPI
+      # ======================================================
 
       - name: Wait for Dockerized FastAPI
         run: |
@@ -235,6 +282,7 @@ jobs:
           for i in range(30):
 
               try:
+
                   response = requests.get(
                       url,
                       timeout=2
@@ -246,16 +294,20 @@ jobs:
                   )
 
                   if response.status_code == 200:
+
                       data = response.json()
 
                       if data.get("status") == "healthy":
+
                           print(
                               "Dockerized FastAPI "
                               "is healthy."
                           )
+
                           break
 
-              except requests.exceptions.RequestException as e:
+              except requests.exceptions.RequestException:
+
                   print(
                       f"Waiting for Dockerized FastAPI... "
                       f"attempt {i + 1}/30"
@@ -264,6 +316,7 @@ jobs:
               time.sleep(2)
 
           else:
+
               print(
                   "Dockerized FastAPI failed "
                   "to become healthy."
@@ -293,23 +346,25 @@ jobs:
               )
 
               raise SystemExit(1)
+
           PY
 
 
-      # --------------------------------------------------
-      # 13. Run API tests against Docker container
-      # --------------------------------------------------
+      # ======================================================
+      # 13. RUN TESTS AGAINST DOCKERIZED API
+      # ======================================================
 
       - name: Run API tests against Docker container
         env:
           API_URL: http://127.0.0.1:8001
+          EXPECTED_MODEL_VERSION: "1"
         run: |
           pytest -v tests/test_api.py
 
 
-      # --------------------------------------------------
-      # 14. Stop Docker container
-      # --------------------------------------------------
+      # ======================================================
+      # 14. STOP DOCKER CONTAINER
+      # ======================================================
 
       - name: Stop Docker container
         if: always()
