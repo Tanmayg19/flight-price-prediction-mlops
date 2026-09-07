@@ -1,0 +1,29 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: flight-streamlit
+
+spec:
+  replicas: 1
+
+  selector:
+    matchLabels:
+      app: flight-streamlit
+
+  template:
+    metadata:
+      labels:
+        app: flight-streamlit
+
+    spec:
+      containers:
+        - name: flight-streamlit
+          image: travel-analytics-mlops-streamlit:latest
+          imagePullPolicy: IfNotPresent
+
+          ports:
+            - containerPort: 8501
+
+          env:
+            - name: API_URL
+              value: "http://flight-api-service:8000"

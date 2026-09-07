@@ -1,0 +1,42 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: flight-api
+spec:
+  replicas: 1
+
+  selector:
+    matchLabels:
+      app: flight-api
+
+  template:
+    metadata:
+      labels:
+        app: flight-api
+
+    spec:
+      containers:
+        - name: flight-api
+          image: travel-analytics-mlops-api:latest
+          imagePullPolicy: IfNotPresent
+
+          ports:
+            - containerPort: 8000
+
+          env:
+            - name: MLFLOW_TRACKING_URI
+              value: "http://host.docker.internal:5000"
+
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 20
+            periodSeconds: 20

@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: flight-streamlit-service
+
+spec:
+  selector:
+    app: flight-streamlit
+
+  ports:
+    - protocol: TCP
+      port: 8501
+      targetPort: 8501
+
+  type: NodePort

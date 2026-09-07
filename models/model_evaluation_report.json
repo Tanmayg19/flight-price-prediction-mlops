@@ -1,0 +1,27 @@
+{
+    "production_model": {
+        "r2": 0.991311783006147,
+        "rmse": 33.83547598766215,
+        "mae": 24.32007415613223
+    },
+    "candidate_model": {
+        "r2": 0.9948257330849798,
+        "rmse": 26.111473175535902,
+        "mae": 20.87214163083082
+    },
+    "improvement": {
+        "r2_difference": 0.003513950078832817,
+        "rmse_reduction": 7.724002812126248,
+        "mae_reduction": 3.4479325253014075
+    },
+    "performance_gate": {
+        "candidate_passed": true,
+        "decision": "PROMOTE",
+        "rule": "Candidate must have higher R2, lower RMSE, and lower MAE than the production model on the same holdout dataset."
+    },
+    "evaluation_config": {
+        "test_size": 0.2,
+        "random_state": 42,
+        "evaluation_rows": 54378
+    }
+}

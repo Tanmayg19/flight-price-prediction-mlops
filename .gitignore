@@ -118,3 +118,13 @@ data/processed/
 # Keep Streamlit application files
 !data/streamlit_app/
 !data/streamlit_app/**
+
+# Apache Airflow runtime files
+airflow/logs/
+airflow/**/__pycache__/
+airflow/**/*.pyc
+airflow/config/
+airflow/.env
+
+# Airflow-generated candidate model
+models/xgb_flight_price_candidate.pkl
