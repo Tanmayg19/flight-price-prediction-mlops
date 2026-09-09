@@ -432,12 +432,19 @@ Stop services:
 docker compose down
 ```
 Service URLs
+
 Service	Local URL
+
 Streamlit	`http://localhost:8501`
+
 FastAPI	`http://localhost:8000`
+
 Swagger Docs	`http://localhost:8000/docs`
+
 Health Check	`http://localhost:8000/health`
+
 MLflow	`http://localhost:5000`
+
 ---
 7. Automated Testing and GitHub Actions
 The FastAPI automated suite contains 10 tests.
