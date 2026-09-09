@@ -1,4 +1,5 @@
-Travel Analytics - End-to-End Machine Learning & MLOps Project
+**Travel Analytics - End-to-End Machine Learning & MLOps Project**
+
 An end-to-end Machine Learning and MLOps portfolio project for flight price prediction and personalized hotel recommendation.
 The project demonstrates a production-oriented machine learning lifecycle including data validation, exploratory data analysis, feature engineering, model training, recommendation modeling, experiment tracking, model registry, automated testing, REST API development, an interactive frontend, containerization, workflow orchestration, CI/CD configuration, and Kubernetes deployment definitions.
 ---
