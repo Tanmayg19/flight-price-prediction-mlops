@@ -4,7 +4,7 @@ import requests
 
 
 # ============================================================
-# TEST CONFIGURATION
+# API Configuration
 # ============================================================
 
 API_URL = os.getenv(
@@ -19,7 +19,7 @@ EXPECTED_MODEL_VERSION = os.getenv(
 
 
 # ============================================================
-# EXPECTED MODEL FEATURES
+# Expected Flight Model Features
 # ============================================================
 
 EXPECTED_FEATURES = [
@@ -53,43 +53,41 @@ EXPECTED_FEATURES = [
 
 
 # ============================================================
-# VALID PREDICTION PAYLOAD
+# Sample Prediction Payload
 # ============================================================
 
-VALID_PAYLOAD = {
-    "features": {
-        "time": 1.5,
-        "distance": 500.0,
-        "flightType_economic": 1,
-        "flightType_firstClass": 0,
-        "flightType_premium": 0,
-        "agency_CloudFy": 1,
-        "agency_FlyingDrops": 0,
-        "agency_Rainbow": 0,
-        "from_Aracaju (SE)": 0,
-        "from_Brasilia (DF)": 0,
-        "from_Campo Grande (MS)": 0,
-        "from_Florianopolis (SC)": 0,
-        "from_Natal (RN)": 0,
-        "from_Recife (PE)": 0,
-        "from_Rio de Janeiro (RJ)": 0,
-        "from_Salvador (BH)": 0,
-        "from_Sao Paulo (SP)": 1,
-        "to_Aracaju (SE)": 0,
-        "to_Brasilia (DF)": 0,
-        "to_Campo Grande (MS)": 0,
-        "to_Florianopolis (SC)": 0,
-        "to_Natal (RN)": 0,
-        "to_Recife (PE)": 0,
-        "to_Rio de Janeiro (RJ)": 1,
-        "to_Salvador (BH)": 0,
-        "to_Sao Paulo (SP)": 0
-    }
+SAMPLE_FEATURES = {
+    "time": 1.5,
+    "distance": 600.0,
+    "flightType_economic": 1,
+    "flightType_firstClass": 0,
+    "flightType_premium": 0,
+    "agency_CloudFy": 1,
+    "agency_FlyingDrops": 0,
+    "agency_Rainbow": 0,
+    "from_Aracaju (SE)": 0,
+    "from_Brasilia (DF)": 0,
+    "from_Campo Grande (MS)": 0,
+    "from_Florianopolis (SC)": 0,
+    "from_Natal (RN)": 0,
+    "from_Recife (PE)": 0,
+    "from_Rio de Janeiro (RJ)": 0,
+    "from_Salvador (BH)": 0,
+    "from_Sao Paulo (SP)": 1,
+    "to_Aracaju (SE)": 0,
+    "to_Brasilia (DF)": 0,
+    "to_Campo Grande (MS)": 0,
+    "to_Florianopolis (SC)": 0,
+    "to_Natal (RN)": 0,
+    "to_Recife (PE)": 0,
+    "to_Rio de Janeiro (RJ)": 1,
+    "to_Salvador (BH)": 0,
+    "to_Sao Paulo (SP)": 0
 }
 
 
 # ============================================================
-# TEST 1 - ROOT ENDPOINT
+# Existing Flight API Tests
 # ============================================================
 
 def test_root_endpoint():
@@ -123,10 +121,11 @@ def test_root_endpoint():
         == "Ready"
     )
 
+    assert (
+        data["recommendation_service"]
+        == "Ready"
+    )
 
-# ============================================================
-# TEST 2 - HEALTH ENDPOINT
-# ============================================================
 
 def test_health_endpoint():
 
@@ -139,10 +138,7 @@ def test_health_endpoint():
 
     data = response.json()
 
-    assert (
-        data["status"]
-        == "healthy"
-    )
+    assert data["status"] == "healthy"
 
     assert (
         data["model_status"]
@@ -159,10 +155,11 @@ def test_health_endpoint():
         == EXPECTED_MODEL_VERSION
     )
 
+    assert (
+        data["recommendation_service"]
+        == "Ready"
+    )
 
-# ============================================================
-# TEST 3 - FEATURES ENDPOINT
-# ============================================================
 
 def test_features_endpoint():
 
@@ -196,15 +193,13 @@ def test_features_endpoint():
     )
 
 
-# ============================================================
-# TEST 4 - PREDICTION ENDPOINT
-# ============================================================
-
 def test_prediction_endpoint():
 
     response = requests.post(
         f"{API_URL}/predict",
-        json=VALID_PAYLOAD,
+        json={
+            "features": SAMPLE_FEATURES
+        },
         timeout=10
     )
 
@@ -228,23 +223,221 @@ def test_prediction_endpoint():
     )
 
 
-# ============================================================
-# TEST 5 - INVALID PREDICTION REQUEST
-# ============================================================
-
 def test_invalid_prediction_request():
-
-    invalid_payload = {
-        "invalid_field": {}
-    }
 
     response = requests.post(
         f"{API_URL}/predict",
-        json=invalid_payload,
+        json={},
         timeout=10
     )
 
-    assert (
-        response.status_code
-        == 422
+    assert response.status_code == 422
+
+
+# ============================================================
+# Recommendation API Tests
+# ============================================================
+
+def test_personalized_recommendation():
+
+    response = requests.get(
+        (
+            f"{API_URL}"
+            "/recommendations/1104"
+            "?top_n=3"
+        ),
+        timeout=10
     )
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert data["user_id"] == 1104
+
+    assert (
+        data["requested_top_n"]
+        == 3
+    )
+
+    assert (
+        data["returned_recommendations"]
+        >= 1
+    )
+
+    assert (
+        data["returned_recommendations"]
+        <= 3
+    )
+
+    recommendations = (
+        data["recommendations"]
+    )
+
+    assert len(
+        recommendations
+    ) == data[
+        "returned_recommendations"
+    ]
+
+    for recommendation in recommendations:
+
+        assert (
+            recommendation[
+                "recommendation_type"
+            ]
+            == "Personalized SVD"
+        )
+
+        assert (
+            recommendation["userCode"]
+            == 1104
+        )
+
+        assert (
+            "name"
+            in recommendation
+        )
+
+        assert (
+            "place"
+            in recommendation
+        )
+
+        assert (
+            "average_price"
+            in recommendation
+        )
+
+
+def test_cold_start_recommendation():
+
+    response = requests.get(
+        (
+            f"{API_URL}"
+            "/recommendations/99999"
+            "?top_n=3"
+        ),
+        timeout=10
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert data["user_id"] == 99999
+
+    assert (
+        data["requested_top_n"]
+        == 3
+    )
+
+    assert (
+        data["returned_recommendations"]
+        == 3
+    )
+
+    recommendations = (
+        data["recommendations"]
+    )
+
+    assert len(
+        recommendations
+    ) == 3
+
+    expected_hotels = [
+        "Hotel CB",
+        "Hotel K",
+        "Hotel AF"
+    ]
+
+    returned_hotels = [
+        recommendation["name"]
+        for recommendation
+        in recommendations
+    ]
+
+    assert (
+        returned_hotels
+        == expected_hotels
+    )
+
+    for recommendation in recommendations:
+
+        assert (
+            recommendation[
+                "recommendation_type"
+            ]
+            == "Popularity Fallback"
+        )
+
+        assert (
+            recommendation["userCode"]
+            == 99999
+        )
+
+        assert (
+            recommendation[
+                "recommendation_score"
+            ]
+            is None
+        )
+
+
+def test_recommendation_top_n():
+
+    response = requests.get(
+        (
+            f"{API_URL}"
+            "/recommendations/99999"
+            "?top_n=2"
+        ),
+        timeout=10
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert (
+        data["requested_top_n"]
+        == 2
+    )
+
+    assert (
+        data["returned_recommendations"]
+        == 2
+    )
+
+    assert (
+        len(data["recommendations"])
+        == 2
+    )
+
+
+def test_invalid_recommendation_top_n_zero():
+
+    response = requests.get(
+        (
+            f"{API_URL}"
+            "/recommendations/99999"
+            "?top_n=0"
+        ),
+        timeout=10
+    )
+
+    assert response.status_code == 422
+
+
+def test_invalid_recommendation_top_n_too_large():
+
+    response = requests.get(
+        (
+            f"{API_URL}"
+            "/recommendations/99999"
+            "?top_n=10"
+        ),
+        timeout=10
+    )
+
+    assert response.status_code == 422

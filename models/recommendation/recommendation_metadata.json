@@ -1,0 +1,15 @@
+{
+    "model_type": "TruncatedSVD",
+    "recommendation_type": "Implicit Feedback",
+    "selected_n_components": 2,
+    "explained_variance": 0.4759853446337923,
+    "interaction_transformation": "log1p(booking_count)",
+    "users": 1310,
+    "hotels": 9,
+    "training_interactions": 8439,
+    "evaluation_strategy": "Leave-One-Out",
+    "primary_metric": "Hit Rate@1",
+    "final_test_svd_hit_rate_at_1": 0.7383,
+    "final_test_popularity_hit_rate_at_1": 0.728,
+    "fallback_strategy": "Popularity-Based"
+}

@@ -1,4 +1,4 @@
-# ============================================================
+
 # FLIGHT PRICE PREDICTION APPLICATION
 # ============================================================
 # Streamlit + REST API + MLflow + XGBoost
@@ -23,7 +23,7 @@ import streamlit as st
 # ============================================================
 
 st.set_page_config(
-    page_title="Flight Price Predictor",
+    page_title="Travel Analytics ML App",
     page_icon="✈️",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -171,19 +171,18 @@ else:
 # 7. APPLICATION TITLE
 # ============================================================
 
-st.title("✈️ Flight Price Predictor")
+st.title("🌍 Travel Analytics ML Application")
 
 st.markdown(
     """
-    ### ML-powered flight price estimation
+    ### ML-powered travel analytics
 
-    Enter your flight details below and use our
-    **XGBoost machine learning model** to estimate
-    the flight price.
+    Use the application to estimate **flight prices** with the
+    XGBoost regression model or explore **personalized hotel
+    recommendations** generated from historical booking behavior.
 
-    The prediction request is sent through a
-    **REST API**, while the model is managed using
-    **MLflow Model Registry**.
+    Both features are served through the **FastAPI REST API**.
+    The flight model is managed using **MLflow Model Registry**.
     """
 )
 
@@ -194,7 +193,7 @@ st.markdown(
 
 with st.sidebar:
 
-    st.header("✈️ Flight Price Predictor")
+    st.header("🌍 Travel Analytics")
 
     st.markdown("---")
 
@@ -202,6 +201,7 @@ with st.sidebar:
         "Navigate",
         [
             "🔮 Prediction",
+            "🏨 Hotel Recommendations",
             "📊 Model Insights",
             "ℹ️ About"
         ]
@@ -846,7 +846,196 @@ if page == "🔮 Prediction":
 
 
 # ============================================================
-# PAGE 2 — MODEL INSIGHTS
+# PAGE 2 — HOTEL RECOMMENDATIONS
+# ============================================================
+
+elif page == "🏨 Hotel Recommendations":
+
+    st.header("🏨 Personalized Hotel Recommendations")
+
+    st.markdown(
+        """
+        Discover hotels based on historical booking behavior.
+
+        - **Known users** receive personalized rankings from the tuned SVD recommender.
+        - **New or unknown users** receive a popularity-based fallback.
+        - A known user may receive fewer recommendations than requested when only a small
+          number of unseen hotels remain.
+
+        Recommendations are ranked across the available hotel catalog. They are **not**
+        presented as multiple hotel choices within one destination because this dataset
+        contains one hotel for each represented destination.
+        """
+    )
+
+    if not health_data:
+        st.error("❌ REST API is offline. Start the API before requesting recommendations.")
+    else:
+        recommendation_status = health_data.get(
+            "recommendation_service",
+            "Unknown"
+        )
+
+        if recommendation_status == "Ready":
+            st.success("✅ Hotel recommendation service is ready")
+        else:
+            st.warning(
+                f"Recommendation service status: {recommendation_status}"
+            )
+
+    st.markdown("---")
+    st.subheader("👤 Recommendation Request")
+
+    with st.form("hotel_recommendation_form"):
+        input_col1, input_col2 = st.columns(2)
+
+        with input_col1:
+            user_id = st.number_input(
+                "User Code",
+                min_value=0,
+                value=1104,
+                step=1,
+                help=(
+                    "Enter an existing user code for personalized recommendations. "
+                    "An unknown code demonstrates the popularity fallback."
+                )
+            )
+
+        with input_col2:
+            top_n = st.selectbox(
+                "Maximum Recommendations",
+                options=[1, 2, 3],
+                index=2
+            )
+
+        recommendation_button = st.form_submit_button(
+            "🏨 Get Hotel Recommendations",
+            use_container_width=True
+        )
+
+    if recommendation_button:
+        try:
+            with st.spinner("🔄 Getting hotel recommendations..."):
+                response = requests.get(
+                    f"{API_URL}/recommendations/{int(user_id)}",
+                    params={"top_n": int(top_n)},
+                    timeout=30
+                )
+
+            if response.status_code == 200:
+                result = response.json()
+                recommendations = result.get("recommendations", [])
+
+                if recommendations:
+                    recommendation_type = recommendations[0].get(
+                        "recommendation_type",
+                        "Unknown"
+                    )
+
+                    if recommendation_type == "Personalized SVD":
+                        st.success(
+                            "✅ Personalized recommendations generated from this "
+                            "user's booking history."
+                        )
+                    else:
+                        st.info(
+                            "ℹ️ No usable personalized history was found for this "
+                            "user, so popular hotels are shown as a fallback."
+                        )
+
+                    returned_count = result.get(
+                        "returned_recommendations",
+                        len(recommendations)
+                    )
+
+                    metric_col1, metric_col2, metric_col3 = st.columns(3)
+
+                    with metric_col1:
+                        st.metric("User Code", int(user_id))
+
+                    with metric_col2:
+                        st.metric("Method", recommendation_type)
+
+                    with metric_col3:
+                        st.metric("Hotels Returned", returned_count)
+
+                    if returned_count < int(top_n):
+                        st.info(
+                            f"{returned_count} recommendation(s) returned instead of "
+                            f"{int(top_n)} because this known user has fewer unseen "
+                            "hotels available."
+                        )
+
+                    st.markdown("---")
+                    st.subheader("⭐ Recommended Hotels")
+
+                    for rank, hotel in enumerate(recommendations, start=1):
+                        st.markdown(f"### {rank}. {hotel.get('name', 'Unknown Hotel')}")
+
+                        hotel_col1, hotel_col2, hotel_col3 = st.columns(3)
+
+                        with hotel_col1:
+                            st.write(
+                                f"**📍 Location:** {hotel.get('place', 'Unknown')}"
+                            )
+                            st.write(
+                                f"**💰 Average Price:** "
+                                f"${float(hotel.get('average_price', 0)):,.2f}"
+                            )
+
+                        with hotel_col2:
+                            st.write(
+                                f"**🛏️ Average Stay:** "
+                                f"{float(hotel.get('average_stay_days', 0)):.2f} days"
+                            )
+                            st.write(
+                                f"**📚 Historical Bookings:** "
+                                f"{int(hotel.get('total_bookings', 0)):,}"
+                            )
+
+                        with hotel_col3:
+                            score = hotel.get("recommendation_score")
+                            if score is None:
+                                st.write("**🎯 Recommendation Score:** N/A")
+                            else:
+                                st.write(
+                                    f"**🎯 Recommendation Score:** {float(score):.4f}"
+                                )
+                            st.write(
+                                f"**🤖 Method:** "
+                                f"{hotel.get('recommendation_type', 'Unknown')}"
+                            )
+
+                        st.markdown("---")
+
+                    with st.expander("🔗 REST API Response"):
+                        st.json(result)
+
+                else:
+                    st.warning("No hotel recommendations were returned.")
+
+            else:
+                st.error("❌ Recommendation API returned an error.")
+                st.code(response.text)
+
+        except requests.exceptions.ConnectionError:
+            st.error(
+                "❌ Could not connect to the FastAPI server. "
+                "Please make sure the API is running."
+            )
+
+        except requests.exceptions.Timeout:
+            st.error("❌ The recommendation API request timed out.")
+
+        except Exception as e:
+            st.error(
+                "❌ Something went wrong while generating hotel recommendations."
+            )
+            st.exception(e)
+
+
+# ============================================================
+# PAGE 3 — MODEL INSIGHTS
 # ============================================================
 
 elif page == "📊 Model Insights":
@@ -1133,7 +1322,7 @@ elif page == "📊 Model Insights":
 
 
 # ============================================================
-# PAGE 3 — ABOUT
+# PAGE 4 — ABOUT
 # ============================================================
 
 elif page == "ℹ️ About":
@@ -1144,11 +1333,13 @@ elif page == "ℹ️ About":
 
     st.markdown(
         """
-        ## ✈️ Flight Price Prediction
+        ## 🌍 Travel Analytics MLOps
 
-        This project is an end-to-end machine learning
-        solution designed to predict flight prices using
-        an **XGBoost regression model**.
+        This project is an end-to-end machine learning solution combining
+        **flight price prediction** with **personalized hotel recommendations**.
+        Flight prices are estimated using an **XGBoost regression model**, while
+        hotel recommendations use an implicit-feedback **Truncated SVD** model
+        with a popularity fallback for cold-start users.
 
         The project demonstrates the complete journey
         from data preparation and exploratory analysis
@@ -1295,10 +1486,10 @@ elif page == "ℹ️ About":
 
         This architecture separates:
 
-        **Frontend → API → Model**
+        **Frontend → API → ML Services**
 
-        making the machine learning model easier to
-        test, maintain and deploy independently.
+        FastAPI serves both the flight-price prediction model and the hotel
+        recommendation service, keeping the frontend separate from model logic.
         """
     )
 
