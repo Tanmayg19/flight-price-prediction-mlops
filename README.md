@@ -1,6 +1,6 @@
 # Travel Analytics - End-to-End Machine Learning & MLOps Project
 
-An end-to-end Machine Learning and MLOps portfolio project for **flight price prediction** and **personalized hotel recommendation**.
+An end-to-end Machine Learning and MLOps portfolio project for **flight price prediction**, **personalized hotel recommendation**, and an **experimental gender classification workflow**.
 
 The project demonstrates a production-oriented machine learning lifecycle including data validation, exploratory data analysis, feature engineering, model training, recommendation modeling, experiment tracking, model registry, automated testing, REST API development, an interactive frontend, containerization, workflow orchestration, CI/CD configuration, and Kubernetes deployment definitions.
 
@@ -8,7 +8,7 @@ The project demonstrates a production-oriented machine learning lifecycle includ
 
 ## Project Overview
 
-This project contains two integrated machine learning use cases:
+This project contains three integrated machine learning use cases:
 
 1. **Flight Price Prediction**
    - Predicts flight prices using an optimized **XGBoost regression model**
@@ -19,6 +19,12 @@ This project contains two integrated machine learning use cases:
    - Recommends hotels using an **implicit-feedback TruncatedSVD recommender**
    - Uses historical user-hotel booking frequency transformed with `log1p(booking_count)`
    - Uses a **popularity-based fallback** for unknown users or users without usable personalized candidates
+
+3. **Gender Classification**
+   - Demonstrates a supervised classification workflow using **company** and **age** to predict the recorded gender label
+   - Uses a tuned **Random Forest** inside a saved scikit-learn pipeline
+   - Achieved **52.22% test accuracy** and **52.20% macro F1**, indicating near-chance predictive performance
+   - Included as an experimental workflow demonstration and **not** as a reliable method for inferring a person's gender
 
 Users interact with a **Streamlit web application**, which communicates with a **FastAPI REST API**.
 
@@ -41,6 +47,7 @@ The main objectives are:
 - Engineer reproducible machine learning features
 - Train and optimize an XGBoost regression model
 - Build an implicit-feedback hotel recommendation model
+- Build and evaluate an experimental gender classification pipeline
 - Track experiments with MLflow
 - Register and version the flight model using MLflow Model Registry
 - Build REST endpoints using FastAPI
@@ -380,7 +387,55 @@ api/recommendation_service.py
 
 ---
 
-# 3. Apache Airflow Pipeline
+# 3. Gender Classification
+
+## Modeling Approach
+
+The gender classification workflow is an **experimental supervised classification demonstration** built from the labeled subset of `users.csv`.
+
+The original dataset contains `male`, `female`, and `none` values. Records labeled `none` are treated as unspecified/unavailable and are excluded from supervised binary model training.
+
+Modeling features:
+
+```text
+company
+age
+```
+
+The unique identifier `code` is excluded, and `name` is excluded because it is near-identifying/high-cardinality and is not appropriate for this modeling objective.
+
+The preprocessing and classifier are stored together in a scikit-learn pipeline:
+
+- One-hot encoding for `company` with unknown-category handling
+- Standard scaling for `age`
+- Tuned Random Forest classifier
+
+### Final Held-Out Performance
+
+| Metric | Value |
+|---|---:|
+| Accuracy | 0.5222 |
+| Macro F1 | 0.5220 |
+
+The result is close to chance, showing that `company` and `age` contain weak predictive signal for the recorded label. The workflow is therefore included to demonstrate classification, preprocessing, tuning, evaluation, serialization, API serving, and frontend integration—not as a reliable system for inferring a person's gender.
+
+### Gender Model Artifact
+
+```text
+models/gender_classification/gender_classifier.pkl
+```
+
+The saved sklearn pipeline is loaded directly by FastAPI. It is **not** registered in MLflow.
+
+### Notebook
+
+```text
+06_Gender_Classification.ipynb
+```
+
+---
+
+# 4. Apache Airflow Pipeline
 
 Apache Airflow orchestrates the automated data and flight-model workflow.
 
@@ -442,9 +497,9 @@ The full 10-task DAG was successfully executed and verified with all tasks compl
 
 ---
 
-# 4. FastAPI REST API
+# 5. FastAPI REST API
 
-FastAPI provides the REST service layer for both ML use cases.
+FastAPI provides the REST service layer for all three machine learning workflows.
 
 Available endpoints:
 
@@ -454,6 +509,7 @@ GET  /health
 GET  /features
 POST /predict
 GET  /recommendations/{user_id}?top_n=3
+POST /gender/predict
 ```
 
 Local API:
@@ -476,7 +532,8 @@ Example health response:
   "model_status": "Ready",
   "model_name": "flight-price-xgboost",
   "model_version": "4",
-  "recommendation_service": "Ready"
+  "recommendation_service": "Ready",
+  "gender_model_status": "Ready"
 }
 ```
 
@@ -502,17 +559,33 @@ Unknown users receive popularity-based fallback recommendations.
 
 The API validates `top_n` within the supported range.
 
+### Gender Classification
+
+`POST /gender/predict`
+
+Example request:
+
+```json
+{
+  "company": "4You",
+  "age": 35
+}
+```
+
+The endpoint returns the predicted recorded label together with model metadata. The supported age range is 21–65.
+
 ---
 
-# 5. Streamlit Application
+# 6. Streamlit Application
 
-The Streamlit frontend provides an interactive interface for both ML systems.
+The Streamlit frontend provides an interactive interface for all three ML workflows.
 
 Pages:
 
 ```text
 🔮 Prediction
 🏨 Hotel Recommendations
+👤 Gender Classification
 📊 Model Insights
 ℹ️ About
 ```
@@ -553,9 +626,18 @@ Personalized SVD
 Popularity Fallback
 ```
 
+### Gender Classification Inputs
+
+Users provide:
+
+- Company
+- Age (21–65)
+
+The page sends the inputs to `POST /gender/predict`, displays the predicted recorded label and model metadata, and clearly warns that the classifier performs close to chance and is not reliable for gender inference.
+
 ---
 
-# 6. Docker and Docker Compose
+# 7. Docker and Docker Compose
 
 The application is containerized with Docker.
 
@@ -571,10 +653,13 @@ Docker Compose
      +---- Streamlit    :8501
 ```
 
-The rebuilt Dockerized application has been verified with both:
+The rebuilt Dockerized application has been verified end-to-end with:
 
 - Flight price prediction
 - Hotel recommendations
+- Gender classification
+
+The Docker health check confirmed the flight model, recommendation service, and gender model were all ready.
 
 Start services:
 
@@ -606,9 +691,9 @@ docker compose down
 
 ---
 
-# 7. Automated Testing and GitHub Actions
+# 8. Automated Testing and GitHub Actions
 
-The FastAPI automated suite contains **10 tests**.
+The FastAPI automated suite contains **12 tests**.
 
 Coverage includes:
 
@@ -622,11 +707,13 @@ Coverage includes:
 8. Recommendation `top_n` behavior
 9. Invalid `top_n=0`
 10. Invalid `top_n=10`
+11. Valid gender classification request
+12. Invalid gender-classification age
 
 The test suite has been verified:
 
 ```text
-10 passed
+12 passed
 ```
 
 It has also passed against the Dockerized API.
@@ -665,7 +752,7 @@ Test Dockerized API
 
 ---
 
-# 8. Jenkins CI/CD
+# 9. Jenkins CI/CD
 
 A declarative `Jenkinsfile` is included.
 
@@ -696,7 +783,7 @@ The Jenkins pipeline definition is included in the repository.
 
 ---
 
-# 9. Kubernetes
+# 10. Kubernetes
 
 Kubernetes manifests are provided for the FastAPI and Streamlit layers.
 
@@ -726,7 +813,7 @@ The MLflow URI in the current Kubernetes API manifest is intended for a local Do
 
 ---
 
-# 10. Project Structure
+# 11. Project Structure
 
 ```text
 Travel-Analytics-MLOps/
@@ -757,6 +844,8 @@ Travel-Analytics-MLOps/
 │   └── streamlit-service.yaml
 |
 ├── models/
+│   ├── gender_classification/
+│   │   └── gender_classifier.pkl
 │   ├── recommendation/
 │   │   ├── hotel_metadata.pkl
 │   │   ├── popularity_ranking.pkl
@@ -777,6 +866,7 @@ Travel-Analytics-MLOps/
 │   ├── 02_EDA.ipynb
 │   ├── 03_Feature_Engineering.ipynb
 │   ├── 05_hotel_recommendation.ipynb
+│   ├── 06_Gender_Classification.ipynb
 │   └── MLFlow.ipynb
 |
 ├── scripts/
@@ -802,7 +892,7 @@ Generated Airflow logs, processed runtime files, virtual environments, generated
 
 ---
 
-# 11. Technology Stack
+# 12. Technology Stack
 
 ### Data and Machine Learning
 
@@ -847,7 +937,7 @@ Generated Airflow logs, processed runtime files, virtual environments, generated
 
 ---
 
-# 12. Running the Project Locally
+# 13. Running the Project Locally
 
 ## 1. Clone the repository
 
@@ -894,7 +984,7 @@ MLflow:          http://localhost:5000
 
 ---
 
-# 13. Configuration
+# 14. Configuration
 
 FastAPI to MLflow:
 
@@ -921,7 +1011,7 @@ The GitHub Actions workflow can override the model version for its isolated CI m
 
 ---
 
-# 14. Model Artifacts
+# 15. Model Artifacts
 
 ## Flight Model
 
@@ -956,9 +1046,18 @@ models/recommendation/
 └── train_interactions.pkl
 ```
 
+## Gender Classification Model
+
+```text
+models/gender_classification/
+└── gender_classifier.pkl
+```
+
+The artifact contains the complete preprocessing and tuned Random Forest pipeline and is loaded directly by FastAPI.
+
 ---
 
-# 15. Implementation Status
+# 16. Implementation Status
 
 | Component | Status |
 |---|---|
@@ -972,12 +1071,15 @@ models/recommendation/
 | Hotel Recommendation EDA | ✅ Implemented |
 | TruncatedSVD Recommender | ✅ Implemented and evaluated |
 | Popularity Fallback | ✅ Implemented |
+| Gender Classification Pipeline | ✅ Implemented and evaluated |
+| Gender Classification API Integration | ✅ Implemented and tested |
+| Gender Classification Streamlit Page | ✅ Implemented and tested |
 | Recommendation Production Service | ✅ Implemented and tested |
 | FastAPI REST API | ✅ Implemented and tested |
 | Streamlit Frontend | ✅ Implemented and tested |
 | Docker | ✅ Implemented and tested |
 | Docker Compose | ✅ Implemented and tested |
-| API Automated Tests | ✅ 10 tests passing |
+| API Automated Tests | ✅ 12 tests passing |
 | GitHub Actions CI | ✅ Successfully executed on latest project state |
 | Apache Airflow | ✅ 10-task pipeline successfully executed |
 | Kubernetes | 🟡 Manifests created and syntax validated |
@@ -988,19 +1090,20 @@ models/recommendation/
 
 ---
 
-# 16. Key Project Highlights
+# 17. Key Project Highlights
 
 - End-to-end regression ML workflow
 - Personalized hotel recommendation system
+- Experimental gender classification workflow with tuned Random Forest
 - Optimized XGBoost regression model
 - Tuned implicit-feedback TruncatedSVD recommender
 - Popularity-based cold-start fallback
 - 26-feature reproducible flight feature pipeline
 - MLflow experiment tracking and Model Registry
-- FastAPI serving two machine learning use cases
+- FastAPI serving three machine learning workflows
 - Interactive multi-page Streamlit frontend
 - Dockerized multi-service application
-- 10 automated API tests
+- 12 automated API tests
 - Successful latest-state GitHub Actions CI
 - Successful 10-task Apache Airflow ML pipeline
 - Automated candidate-vs-production performance gate
@@ -1010,7 +1113,7 @@ models/recommendation/
 
 ---
 
-# 17. Limitations and Future Improvements
+# 18. Limitations and Future Improvements
 
 Potential future improvements include:
 
@@ -1024,6 +1127,7 @@ Potential future improvements include:
 - Expand the hotel catalog to support richer recommendation evaluation
 - Add more item and user-side recommendation features
 - Use native XGBoost model serialization and explicit version pinning for stronger cross-version compatibility
+- Improve the gender-classification feature set only if a legitimate, privacy-conscious use case and suitable data become available; the current age/company model remains near chance and should not be used for reliable gender inference
 
 ---
 

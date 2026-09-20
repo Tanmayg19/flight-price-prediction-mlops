@@ -53,7 +53,7 @@ EXPECTED_FEATURES = [
 
 
 # ============================================================
-# Sample Prediction Payload
+# Sample Flight Prediction Payload
 # ============================================================
 
 SAMPLE_FEATURES = {
@@ -87,7 +87,7 @@ SAMPLE_FEATURES = {
 
 
 # ============================================================
-# Existing Flight API Tests
+# Flight API Tests
 # ============================================================
 
 def test_root_endpoint():
@@ -103,7 +103,7 @@ def test_root_endpoint():
 
     assert (
         data["message"]
-        == "Flight Price Prediction API is running"
+        == "Travel Analytics API is running"
     )
 
     assert (
@@ -123,6 +123,11 @@ def test_root_endpoint():
 
     assert (
         data["recommendation_service"]
+        == "Ready"
+    )
+
+    assert (
+        data["gender_model_status"]
         == "Ready"
     )
 
@@ -157,6 +162,11 @@ def test_health_endpoint():
 
     assert (
         data["recommendation_service"]
+        == "Ready"
+    )
+
+    assert (
+        data["gender_model_status"]
         == "Ready"
     )
 
@@ -441,3 +451,67 @@ def test_invalid_recommendation_top_n_too_large():
     )
 
     assert response.status_code == 422
+
+
+# ============================================================
+# Gender Classification API Tests
+# ============================================================
+
+def test_gender_prediction_endpoint():
+
+    response = requests.post(
+        f"{API_URL}/gender/predict",
+        json={
+            "company": "4You",
+            "age": 35
+        },
+        timeout=10
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert (
+        data["predicted_gender"]
+        in ["male", "female"]
+    )
+
+    assert (
+        data["company"]
+        == "4You"
+    )
+
+    assert (
+        data["age"]
+        == 35
+    )
+
+    assert (
+        data["model"]
+        == "Tuned Random Forest"
+    )
+
+    assert (
+        data["test_accuracy"]
+        == 0.5222
+    )
+
+    assert (
+        data["macro_f1"]
+        == 0.5220
+    )
+
+
+def test_invalid_gender_prediction_age():
+
+    response = requests.post(
+        f"{API_URL}/gender/predict",
+        json={
+            "company": "4You",
+            "age": 100
+        },
+        timeout=10
+    )
+
+    assert response.status_code == 400

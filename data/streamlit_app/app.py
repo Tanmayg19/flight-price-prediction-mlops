@@ -202,6 +202,7 @@ with st.sidebar:
         [
             "🔮 Prediction",
             "🏨 Hotel Recommendations",
+            "👤 Gender Classification",
             "📊 Model Insights",
             "ℹ️ About"
         ]
@@ -1033,9 +1034,343 @@ elif page == "🏨 Hotel Recommendations":
             )
             st.exception(e)
 
+# ============================================================
+# PAGE 3 — GENDER CLASSIFICATION
+# ============================================================
+
+elif page == "👤 Gender Classification":
+
+    st.header(
+        "👤 Gender Classification"
+    )
+
+    st.markdown(
+        """
+        This page demonstrates the **Gender Classification**
+        component of the Travel Analytics project.
+
+        The model uses the available non-identifying features
+        **company** and **age** to predict the recorded gender
+        label in the modeling dataset.
+        """
+    )
+
+    # --------------------------------------------------------
+    # MODEL LIMITATION NOTICE
+    # --------------------------------------------------------
+
+    st.warning(
+        """
+        ⚠️ **Experimental classification model**
+
+        This classifier is included to demonstrate a complete
+        machine-learning classification workflow.
+
+        Its predictive performance is close to chance level,
+        so predictions should **not** be interpreted as reliable
+        gender inference.
+        """
+    )
+
+    st.markdown("---")
+
+
+    # ========================================================
+    # MODEL INFORMATION
+    # ========================================================
+
+    st.subheader(
+        "🤖 Model Information"
+    )
+
+    info_col1, info_col2, info_col3 = st.columns(3)
+
+    with info_col1:
+
+        st.metric(
+            "Model",
+            "Random Forest"
+        )
+
+    with info_col2:
+
+        st.metric(
+            "Test Accuracy",
+            "52.22%"
+        )
+
+    with info_col3:
+
+        st.metric(
+            "Macro F1",
+            "52.20%"
+        )
+
+
+    st.markdown("---")
+
+
+    # ========================================================
+    # GENDER CLASSIFICATION FORM
+    # ========================================================
+
+    st.subheader(
+        "📝 Enter User Information"
+    )
+
+    with st.form(
+        "gender_classification_form"
+    ):
+
+        input_col1, input_col2 = st.columns(2)
+
+
+        # ----------------------------------------------------
+        # COMPANY
+        # ----------------------------------------------------
+
+        with input_col1:
+
+            company = st.selectbox(
+                "🏢 Company",
+                [
+                    "4You",
+                    "Acme Factory",
+                    "Monsters CYA",
+                    "Umbrella LTDA",
+                    "Wonka Company"
+                ]
+            )
+
+
+        # ----------------------------------------------------
+        # AGE
+        # ----------------------------------------------------
+
+        with input_col2:
+
+            age = st.number_input(
+                "🎂 Age",
+                min_value=21,
+                max_value=65,
+                value=35,
+                step=1,
+                help=(
+                    "The training dataset contains users "
+                    "between 21 and 65 years old."
+                )
+            )
+
+
+        # ----------------------------------------------------
+        # PREDICTION BUTTON
+        # ----------------------------------------------------
+
+        st.markdown("")
+
+        gender_predict_button = (
+            st.form_submit_button(
+                "👤 Generate Classification",
+                use_container_width=True
+            )
+        )
+
+
+    # ========================================================
+    # CALL FASTAPI
+    # ========================================================
+
+    if gender_predict_button:
+
+        try:
+
+            payload = {
+                "company": company,
+                "age": int(age)
+            }
+
+
+            with st.spinner(
+                "🔄 Sending request to the classification API..."
+            ):
+
+                response = requests.post(
+                    f"{API_URL}/gender/predict",
+                    json=payload,
+                    timeout=30
+                )
+
+
+            # =================================================
+            # SUCCESSFUL RESPONSE
+            # =================================================
+
+            if response.status_code == 200:
+
+                result = response.json()
+
+                predicted_gender = (
+                    result.get(
+                        "predicted_gender",
+                        "Unknown"
+                    )
+                )
+
+
+                st.success(
+                    "✅ Classification generated successfully!"
+                )
+
+                st.markdown("---")
+
+
+                # --------------------------------------------
+                # CLASSIFICATION RESULT
+                # --------------------------------------------
+
+                st.subheader(
+                    "🎯 Classification Result"
+                )
+
+                result_col1, result_col2 = st.columns(2)
+
+
+                with result_col1:
+
+                    st.metric(
+                        "Predicted Recorded Label",
+                        predicted_gender.title()
+                    )
+
+
+                with result_col2:
+
+                    st.metric(
+                        "Model",
+                        result.get(
+                            "model",
+                            "Tuned Random Forest"
+                        )
+                    )
+
+
+                # --------------------------------------------
+                # INPUT SUMMARY
+                # --------------------------------------------
+
+                st.markdown("---")
+
+                st.subheader(
+                    "📋 Input Summary"
+                )
+
+                summary_col1, summary_col2 = st.columns(2)
+
+
+                with summary_col1:
+
+                    st.write(
+                        f"**Company:** {company}"
+                    )
+
+
+                with summary_col2:
+
+                    st.write(
+                        f"**Age:** {int(age)}"
+                    )
+
+
+                # --------------------------------------------
+                # IMPORTANT INTERPRETATION
+                # --------------------------------------------
+
+                st.info(
+                    """
+                    **Interpretation:** This output represents the
+                    model's predicted recorded label based only on
+                    age and company.
+
+                    Because the model achieved approximately 52%
+                    test accuracy, this prediction should not be
+                    treated as a reliable inference about an
+                    individual's gender.
+                    """
+                )
+
+
+                # --------------------------------------------
+                # API RESPONSE
+                # --------------------------------------------
+
+                with st.expander(
+                    "🔗 REST API Response"
+                ):
+
+                    st.json(
+                        result
+                    )
+
+
+            # =================================================
+            # API ERROR RESPONSE
+            # =================================================
+
+            else:
+
+                st.error(
+                    "❌ Gender classification API "
+                    "returned an error."
+                )
+
+                st.code(
+                    response.text
+                )
+
+
+        # =====================================================
+        # CONNECTION ERROR
+        # =====================================================
+
+        except requests.exceptions.ConnectionError:
+
+            st.error(
+                """
+                ❌ Could not connect to the FastAPI server.
+
+                Please make sure FastAPI is running.
+                """
+            )
+
+
+        # =====================================================
+        # TIMEOUT ERROR
+        # =====================================================
+
+        except requests.exceptions.Timeout:
+
+            st.error(
+                "❌ The gender classification API "
+                "request timed out."
+            )
+
+
+        # =====================================================
+        # OTHER ERRORS
+        # =====================================================
+
+        except Exception as e:
+
+            st.error(
+                "❌ Something went wrong while "
+                "generating the classification."
+            )
+
+            st.exception(e)
+
 
 # ============================================================
-# PAGE 3 — MODEL INSIGHTS
+# PAGE 4 — MODEL INSIGHTS
 # ============================================================
 
 elif page == "📊 Model Insights":
@@ -1046,12 +1381,20 @@ elif page == "📊 Model Insights":
 
     st.markdown(
         """
-        The flight price prediction model was developed
-        using **XGBoost** and is managed using
-        **MLflow Model Registry**.
 
-        The Streamlit application communicates with the
-        trained model through a **FastAPI REST API**.
+        ### ML-powered travel analytics
+
+        This application brings together three machine-learning workflows:
+
+        - **Flight Price Prediction** using a tuned XGBoost regression model
+        - **Personalized Hotel Recommendations** using implicit-feedback Truncated SVD
+          with a popularity fallback
+        - **Experimental Gender Classification** using age and company to predict the
+          recorded gender label in the modeling dataset
+
+        The machine-learning services are exposed through the
+        **FastAPI REST API**. The flight model is managed using
+        **MLflow Model Registry**.
         """
     )
 
@@ -1335,17 +1678,20 @@ elif page == "ℹ️ About":
         """
         ## 🌍 Travel Analytics MLOps
 
-        This project is an end-to-end machine learning solution combining
-        **flight price prediction** with **personalized hotel recommendations**.
-        Flight prices are estimated using an **XGBoost regression model**, while
-        hotel recommendations use an implicit-feedback **Truncated SVD** model
-        with a popularity fallback for cold-start users.
+        - **Flight Price Prediction** using a tuned XGBoost regression model
+        - **Personalized Hotel Recommendations** using an implicit-feedback
+          Truncated SVD recommender with a popularity fallback
+        - **Experimental Gender Classification** using a tuned Random Forest
+          pipeline based on age and company
 
-        The project demonstrates the complete journey
-        from data preparation and exploratory analysis
-        to machine learning, experiment tracking,
-        model registry, REST API and interactive
-        application deployment.
+        The gender classifier is included as a classification-workflow
+        demonstration. Its performance is close to chance level, so its
+        predictions should not be interpreted as reliable gender inference.
+
+        The project demonstrates the journey from data preparation and
+        exploratory analysis through model development, experiment tracking,
+        REST API integration, containerization, workflow orchestration,
+        CI/CD configuration, and interactive application deployment.
         """
     )
 
@@ -1425,15 +1771,20 @@ elif page == "ℹ️ About":
 
         ↓
 
-        **MLflow Model Registry**
+        **Machine Learning Services**
 
-        ↓
+        **1. Flight Price Prediction**  
+        MLflow Model Registry → XGBoost Model → Predicted Flight Price
 
-        **XGBoost Model**
+        **2. Hotel Recommendation**  
+        Truncated SVD → Personalized Hotel Recommendations  
+        Popularity Model → Cold-start / fallback recommendations
 
-        ↓
+        **3. Gender Classification**  
+        Scikit-learn Pipeline → Tuned Random Forest → Predicted Recorded Label
 
-        **Predicted Flight Price**
+        Docker Compose integrates the **MLflow**, **FastAPI**, and
+        **Streamlit** services for local containerized deployment.
         """
     )
 
@@ -1482,14 +1833,21 @@ elif page == "ℹ️ About":
     st.markdown(
         """
         FastAPI provides a REST API layer between the
-        Streamlit application and the machine learning model.
+        Streamlit frontend and the machine learning services.
 
         This architecture separates:
 
         **Frontend → API → ML Services**
 
-        FastAPI serves both the flight-price prediction model and the hotel
-        recommendation service, keeping the frontend separate from model logic.
+        FastAPI exposes:
+
+        - `/predict` for flight-price prediction
+        - `/recommendations/{user_id}` for hotel recommendations
+        - `/gender/predict` for the experimental gender-classification workflow
+        - `/health` for application and model-service health monitoring
+
+        This keeps the Streamlit user interface separate from the
+        underlying model and recommendation logic.
         """
     )
 
@@ -1518,6 +1876,6 @@ elif page == "ℹ️ About":
     st.markdown("---")
 
     st.caption(
-        "Flight Price Prediction | "
+        "Travel Analytics | "
         "Machine Learning & MLOps Project"
     )
